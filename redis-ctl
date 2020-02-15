@@ -1,0 +1,214 @@
+#!/usr/bin/env bash
+
+#/*
+# * Copyright 2017 ~ 2025 the original author or authors. <wanglsir@gmail.com, 983708408@qq.com>
+# *
+# * Licensed under the Apache License, Version 2.0 (the "License");
+# * you may not use this file except in compliance with the License.
+# * You may obtain a copy of the License at
+# *
+# *      http://www.apache.org/licenses/LICENSE-2.0
+# *
+# * Unless required by applicable law or agreed to in writing, software
+# * distributed under the License is distributed on an "AS IS" BASIS,
+# * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# * See the License for the specific language governing permissions and
+# * limitations under the License.
+# */
+
+CMD1=$1
+CMD2=$2
+CMD3=$3
+CMD4=$4
+CMD_ALL=$@
+
+#REDIS_HOME="$(cd "`dirname "$0"`"/.; pwd)"
+REDIS_HOME="/usr/local/redis"
+RUN_DIR=$REDIS_HOME/run
+NODES_DIR=$REDIS_HOME/nodes
+LOG_DIR=/mnt/disk1/log/redis
+RDB_DIR=/mnt/disk1/redis/rdb
+
+mkdir -p $RUN_DIR
+mkdir -p $NODES_DIR
+mkdir -p $LOG_DIR
+mkdir -p $RDB_DIR
+
+# Start redis cluster nodes process.
+function start(){
+  PIDS=$(getPids)
+  if [ -z "$PIDS" ]; then
+    for conf in $REDIS_HOME/conf/*
+    do
+      EXEC_CMD="$REDIS_HOME/bin/redis-server $conf"
+      $EXEC_CMD
+    done;
+
+    echo -n "Redis starting ..."
+    while true
+    do
+      PIDS=$(getPids)
+      if [ "$PIDS" == "" ]; then
+        echo -n ".";
+        sleep 0.8;
+      else
+        break;
+      fi
+    done
+    echo -e "\nStarted on "$PIDS
+  else
+    echo -e "\nServer is running "$PIDS
+  fi
+}
+
+# Stop redis cluster nodes process.
+function stop(){
+  PIDS=$(getPids) # Get current process code.
+  if [ -z "$PIDS" ]; then
+    echo "No running redis!"
+  else
+    echo -n "Stopping redis $PIDS .."
+    kill -s TERM $PIDS
+    while true
+    do
+      PIDS=$(getPids)
+      if [ "$PIDS" == "" ]; then
+        break;
+      else
+        echo -n ".";
+        sleep 0.8;
+      fi
+    done
+    echo -e "\nStop successfully."
+  fi
+}
+
+# Cleanup redis cluster meta-data info.
+function cleanup(){
+  rm -rf $NODES_DIR/*
+  echo "Cleaning remove $NODES_DIR/*"
+  rm -rf $RUN_DIR/*
+  echo "Cleaning remove $RUN_DIR/*"
+
+  if [ "$CMD2" == "--force" ]; then
+    rm -rf $LOG_DIR/*
+    echo "Cleaning remove $LOG_DIR/*"
+    rm -rf $RDB_DIR/*
+    echo "Cleaning remove $RDB_DIR/*"
+  fi
+}
+
+# Initializing create redis cluster.
+function cluster(){
+  REDIS_PASSWD=$CMD2
+  CLUSTER_NODES=$(echo $CMD3|sed 's/,/ /g')
+
+  if [ -z "$REDIS_PASSWD" ]; then
+    echo "cluster <password> <[host1:port1],[host2:port2] ...>"
+    exit 0
+  elif [ -z "$CLUSTER_NODES" ]; then
+    echo "cluster <password> <[host1:port1],[host2:port2] ...>"
+    exit 0
+  fi
+
+  EXEC_CMD=exec /bin/echo yes|$REDIS_HOME/bin/redis-cli -a $REDIS_PASSWD --cluster create --cluster-replicas 1 $CLUSTER_NODES
+  $EXEC_CMD
+}
+
+# Fix redis cluster down to up.(e.g. cluster is shutdown)
+function fix(){
+  REDIS_PASSWD=$CMD2
+  REDIS_NODE=$CMD3
+
+  if [ -z "$REDIS_PASSWD" ]; then
+    echo "fix <password> <host:port>"
+    exit 0
+  elif [ -z "$REDIS_NODE" ]; then
+    echo "fix <password> <host:port>"
+    exit 0
+  fi
+
+  EXEC_CMD="$REDIS_HOME/bin/redis-cli -a $REDIS_PASSWD --cluster fix $REDIS_NODE"
+  $EXEC_CMD
+}
+
+# Print redis cluster process info.
+function status(){
+  PIDS=$(getPids)
+  if [ -z "$PIDS" ]; then
+    echo "No running information!"
+  else
+    echo -e "--- Redis runing information ---\n"
+    ps ax | grep -i $REDIS_HOME | grep -v grep
+    echo -e "\n"
+  fi
+}
+
+# Update redis cluster password.
+function passwd(){
+  REDIS_PASSWD=$CMD2
+  NEW_PASSWD=$CMD3
+  NODES=(${CMD4//,/ })
+
+  if [ -z "$REDIS_PASSWD" ]; then
+    echo "passwd <olderPassword> <newPassword> <[host:port1],[host:port2] ...>"
+    exit 0
+  elif [ -z "$NEW_PASSWD" ]; then
+    echo "passwd <olderPassword> <newPassword> <[host:port1],[host:port2] ...>"
+    exit 0
+  elif [ -z "$NODES" ]; then
+    echo "passwd <olderPassword> <newPassword> <[host:port1],[host:port2] ...>"
+    exit 0
+  fi
+
+  for node in ${NODES[@]}
+  do
+    IFS="\:" # Set shell string separators.
+    hostAndPort=($node)
+    host=${hostAndPort[0]}
+    port=${hostAndPort[1]}
+    EXEC_CMD="${REDIS_HOME}/bin/redis-cli -h ${host} -p ${port} -a ${REDIS_PASSWD} config set masterauth ${NEW_PASSWD}"
+    /bin/bash -c $EXEC_CMD
+    EXEC_CMD="${REDIS_HOME}/bin/redis-cli -h ${host} -p ${port} -a ${REDIS_PASSWD} config set requirepass ${NEW_PASSWD}"
+    /bin/bash -c $EXEC_CMD
+  done
+}
+
+# Get redis nodes process ID.
+function getPids(){
+  PIDS=$(ps ax | grep -i $REDIS_HOME | grep -v grep | awk '{print $1}')
+  echo $PIDS # Result value.
+  return 0 # Return execution code.
+}
+
+case $CMD1 in
+  status)
+    status
+    ;;
+  start)
+    start
+    ;;
+  stop)
+    stop
+    ;;
+  restart)
+    stop
+    start
+    ;;
+  cluster)
+    cluster
+    ;;
+  fix)
+    fix
+    ;;
+  passwd)
+    passwd
+    ;;
+  cleanup)
+    cleanup
+    ;;
+    *)
+  echo $"Usage:{start|stop|restart|status|cluster <password> <[host1:port1],[host2:port2]...> | fix <password> <host:port> | passwd <[host:port1],[host:port2]...> | cleanup [--force]}"
+  exit 2
+esac
+
