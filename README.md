@@ -27,8 +27,8 @@ docker run -itd \
 wl4g/redis-cluster:latest -XlistenIp='127.0.0.1'  -XredisPassword='123456'
 ```
 
-### Notes:
-> 国内的朋友推荐使用阿里云镜像加速(>=1.10.0), 修改配置文件/etc/docker/daemon.json
+### FQA
+- How to configure fast image in China?
 ```
 sudo mkdir -p /etc/docker
 sudo tee /etc/docker/daemon.json <<-'EOF'
@@ -39,5 +39,7 @@ EOF
 sudo systemctl daemon-reload
 sudo systemctl restart docker
 ```
-- pull的时候将镜像名(wl4g/redis-cluster:latest)改为: registry.cn-shenzhen.aliyuncs.com/wl4g/redis-cluster:latest
-- 如果是阿里vpc的机器, 走vpc内网更快地飞起来(限华南1): registry-vpc.cn-shenzhen.aliyuncs.com/wl4g/redis-cluster:latest
+Notes:
+- 1. When pulling, the image name (wl4g / redis) will be changed- cluster:latest ）Change to: registry.cn-shenzhen.aliyuncs.com/wl4g/redis-cluster:latest
+- 2. If it's a VPC machine from Alibaba, it can fly faster through the VPC intranet (limited to South China 1): registry-vpc.cn-shenzhen.aliyuncs.com/wl4g/redis-cluster:latest
+
