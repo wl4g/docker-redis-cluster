@@ -27,7 +27,7 @@ docker run -itd \
 wl4g/redis-cluster:latest -XlistenIp='127.0.0.1'  -XredisPassword='123456'
 ```
 
-### FQA
+### FAQ
 - How to configure fast image in China?
 ```
 sudo mkdir -p /etc/docker
